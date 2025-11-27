@@ -19,14 +19,9 @@ const App: React.FC = () => {
   const handleCreateSession = async () => {
     if (!topic.trim()) return;
     
-    // Check key for Pro Image model
-    if (window.aistudio) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-             await window.aistudio.openSelectKey();
-        }
-    }
-
+    // We used to enforce a paid key for Pro models here, 
+    // but now we use Flash models which work on the free tier.
+    
     setStatus(AppStatus.PROCESSING);
     setError(null);
     setSession(null);
@@ -154,7 +149,7 @@ const App: React.FC = () => {
                 <div className="flex flex-col gap-3 w-full md:w-auto min-w-[200px]">
                    <div className="space-y-1">
                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                        <ImageIcon size={12}/> Visual Quality
+                        <ImageIcon size={12}/> Visual Style
                      </label>
                      <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-700">
                         {(['1K', '2K', '4K'] as ImageSize[]).map((size) => (
@@ -186,11 +181,10 @@ const App: React.FC = () => {
                 </div>
               </div>
               
-              {/* API Key Hint */}
-              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-xs text-slate-500">
-                 <div className="flex items-center gap-1">
-                   <Settings2 size={12}/>
-                   <span>Paid key required for HD images.</span>
+              {/* Footer / API Key Hint */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                 <div>
+                    Powered by Gemini Flash 2.5 (Free Tier Compatible)
                  </div>
                  <button onClick={handleKeySelect} className="text-cyan-400 hover:underline flex items-center gap-1 ml-auto md:ml-0">
                     <Key size={10}/> Change Key

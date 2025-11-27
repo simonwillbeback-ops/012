@@ -14,7 +14,7 @@ const getAI = (apiKey?: string) => {
 export const chatWithGuide = async (history: { role: string, parts: { text: string }[] }[], message: string) => {
   const ai = getAI();
   const chat = ai.chats.create({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     history: history,
     config: {
       systemInstruction: "You are a calming, empathetic meditation guide. Keep your responses concise, soothing, and helpful. You help users find mindfulness.",
@@ -28,7 +28,7 @@ export const chatWithGuide = async (history: { role: string, parts: { text: stri
 export const generateMeditationScript = async (topic: string): Promise<string> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Write a short, soothing guided meditation script about: ${topic}. 
     The script should be around 150-200 words. 
     Focus on sensory details and breathing. 
@@ -40,34 +40,20 @@ export const generateMeditationScript = async (topic: string): Promise<string> =
 // --- Image Generation ---
 
 export const generateMeditationImage = async (prompt: string, size: ImageSize): Promise<string> => {
-  // Check for User API Key for Veo/Pro Image models
-  let apiKey = API_KEY;
-  if (window.aistudio) {
-    const hasKey = await window.aistudio.hasSelectedApiKey();
-    if (!hasKey) {
-      throw new Error("Please select an API Key to generate high-quality images.");
-    }
-    // We assume the key is injected or available via process.env if selected, 
-    // but the instruction says "You must append an API key...". 
-    // Actually, for the SDK, we just instantiate a new client.
-    // However, the rule says: "Users MUST select their own paid API key... Create a new GoogleGenAI instance right before making an API call"
-    // The selected key is available via process.env.API_KEY *after* selection in some environments, 
-    // but for safety in this specific "Pro" context, we rely on the environment being updated or just proceeding.
-    // The key is injected automatically into process.env.API_KEY after selection in this specific web container environment.
-  }
+  // Use the standard Flash Image model which is available in the free tier
+  const ai = getAI();
 
-  // Re-instantiate to ensure we catch any newly selected key if the environment updates
-  const ai = getAI(process.env.API_KEY);
+  // Flash model does not support 'imageSize' in config, so we add it to the prompt for stylistic guidance
+  const resolutionPrompt = size === '4K' ? 'highly detailed, 4k resolution, masterpiece' : 'high quality';
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-image-preview',
+    model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{ text: `A serene, artistic, calming meditation background image about: ${prompt}. Soft lighting, abstract or nature-focused, high quality, 8k.` }],
+      parts: [{ text: `A serene, artistic, calming meditation background image about: ${prompt}. Soft lighting, abstract or nature-focused, ${resolutionPrompt}.` }],
     },
     config: {
       imageConfig: {
-        aspectRatio: "16:9",
-        imageSize: size
+        aspectRatio: "16:9"
       }
     }
   });
@@ -100,28 +86,20 @@ export const generateMeditationAudio = async (text: string): Promise<string> => 
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!base64Audio) throw new Error("Failed to generate speech");
 
-  // Convert base64 to Blob URL for playback
-  const binaryString = window.atob(base64Audio);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const blob = new Blob([bytes], { type: 'audio/pcm' }); 
-  // Note: Browsers can't play raw PCM directly via <audio src>. 
-  // We need to wrap it or decode it. 
-  // The SDK returns raw PCM. 
-  // For simplicity in the app, we will assume we need to decode it with AudioContext 
-  // OR we can try to request MP3 if supported (it's not).
-  // We will return the base64 and handle decoding in the component 
-  // OR return a WAV blob if we add a header.
-  
-  // Let's add a simple WAV header so it plays in a standard <audio> element or Howler.
-  // Or simpler: Just return the raw base64 and use the AudioContext in the component.
   return base64Audio;
 };
 
-// WAV Header helper (Optional, but makes <audio> tag work)
+export const convertBase64ToWavBlob = (base64: string): string => {
+   const binaryString = window.atob(base64);
+   const len = binaryString.length;
+   const bytes = new Uint8Array(len);
+   for (let i = 0; i < len; i++) {
+     bytes[i] = binaryString.charCodeAt(i);
+   }
+   return pcmToWav(bytes);
+}
+
+// WAV Header helper
 function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000) {
   const header = new ArrayBuffer(44);
   const view = new DataView(header);
@@ -155,14 +133,4 @@ function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) {
     view.setUint8(offset + i, string.charCodeAt(i));
   }
-}
-
-export const convertBase64ToWavBlob = (base64: string): string => {
-   const binaryString = window.atob(base64);
-   const len = binaryString.length;
-   const bytes = new Uint8Array(len);
-   for (let i = 0; i < len; i++) {
-     bytes[i] = binaryString.charCodeAt(i);
-   }
-   return pcmToWav(bytes);
 }
