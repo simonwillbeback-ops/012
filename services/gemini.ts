@@ -1,7 +1,16 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { ImageSize } from "../types";
 
-const API_KEY = process.env.API_KEY || '';
+// Safe access to process.env
+const getEnvApiKey = () => {
+  try {
+    return typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const API_KEY = getEnvApiKey();
 
 // --- Helpers ---
 

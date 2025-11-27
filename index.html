@@ -3,9 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="google" content="notranslate" />
     <title>MindfulGen AI | Meditation Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+    <script>
+      // Polyfill for process.env to prevent ReferenceError in browser environments
+      if (typeof process === "undefined") {
+        window.process = { env: {} };
+      }
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       body {
@@ -59,7 +66,7 @@
 }
 </script>
 </head>
-  <body>
+  <body class="notranslate">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
