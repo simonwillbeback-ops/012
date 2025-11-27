@@ -6,23 +6,32 @@ const API_KEY = process.env.API_KEY || '';
 // --- Helpers ---
 
 const getAI = (apiKey?: string) => {
-  return new GoogleGenAI({ apiKey: apiKey || API_KEY });
+  const key = apiKey || API_KEY;
+  if (!key) {
+    throw new Error("API Key is missing. Please set the API_KEY environment variable in your deployment settings.");
+  }
+  return new GoogleGenAI({ apiKey: key });
 };
 
 // --- Chat & Script Generation ---
 
 export const chatWithGuide = async (history: { role: string, parts: { text: string }[] }[], message: string) => {
-  const ai = getAI();
-  const chat = ai.chats.create({
-    model: 'gemini-2.5-flash',
-    history: history,
-    config: {
-      systemInstruction: "You are a calming, empathetic meditation guide. Keep your responses concise, soothing, and helpful. You help users find mindfulness.",
-    }
-  });
+  try {
+    const ai = getAI();
+    const chat = ai.chats.create({
+      model: 'gemini-2.5-flash',
+      history: history,
+      config: {
+        systemInstruction: "You are a calming, empathetic meditation guide. Keep your responses concise, soothing, and helpful. You help users find mindfulness.",
+      }
+    });
 
-  const result = await chat.sendMessage({ message });
-  return result.text;
+    const result = await chat.sendMessage({ message });
+    return result.text;
+  } catch (error: any) {
+    console.error("Chat Error:", error);
+    throw error;
+  }
 };
 
 export const generateMeditationScript = async (topic: string): Promise<string> => {

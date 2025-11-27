@@ -19,15 +19,6 @@ const Waveform: React.FC<WaveformProps> = ({ isPlaying }) => {
           }}
         />
       ))}
-      <style>{`
-        @keyframes music-bar {
-          0%, 100% { height: 10%; opacity: 0.5; }
-          50% { height: 100%; opacity: 1; }
-        }
-        .animate-music-bar {
-          animation: music-bar 1s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };

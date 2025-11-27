@@ -22,15 +22,8 @@ const LoadingState: React.FC = () => {
       </div>
 
       <div className="w-64 h-2 bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full bg-cyan-500 animate-[loading_2s_ease-in-out_infinite] w-1/2 rounded-full relative"></div>
+        <div className="h-full bg-cyan-500 animate-loading-slide w-1/2 rounded-full relative"></div>
       </div>
-      
-      <style>{`
-        @keyframes loading {
-          0% { left: -50%; }
-          100% { left: 100%; }
-        }
-      `}</style>
     </div>
   );
 };
