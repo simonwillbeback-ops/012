@@ -5,15 +5,22 @@ export enum AppStatus {
   ERROR = 'ERROR'
 }
 
-export interface ProcessedImage {
-  original: string; // Base64 data URL
-  result: string;   // Base64 data URL
+export type ImageSize = '1K' | '2K' | '4K';
+
+export interface MeditationSession {
+  topic: string;
+  script: string;
+  imageUrl: string;
+  audioUrl: string; // Blob URL
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: Date;
 }
 
 export interface ProcessingError {
   message: string;
 }
-
-export type ProcessingOptions = {
-  promptOverride?: string;
-};

@@ -1,239 +1,263 @@
-import React, { useState, useRef } from 'react';
-import { Upload, X, Wand2, Download, AlertCircle, Image as ImageIcon, Eraser } from 'lucide-react';
-import { AppStatus, ProcessedImage } from './types';
-import { resizeImage, downloadImage } from './services/imageUtils';
-import { removeWatermark } from './services/geminiService';
-import ComparisonSlider from './components/ComparisonSlider';
+import React, { useState } from 'react';
+import { Sparkles, Play, Pause, RefreshCw, MessageCircle, Settings2, Image as ImageIcon, Key } from 'lucide-react';
+import { AppStatus, ImageSize, MeditationSession } from './types';
+import * as GeminiService from './services/gemini';
+import ChatBot from './components/ChatBot';
+import Waveform from './components/Waveform';
 import LoadingState from './components/LoadingState';
 
 const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
-  const [images, setImages] = useState<ProcessedImage | null>(null);
+  const [topic, setTopic] = useState('');
+  const [imageSize, setImageSize] = useState<ImageSize>('1K');
+  const [session, setSession] = useState<MeditationSession | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [activeTab, setActiveTab] = useState<'create' | 'chat'>('create');
   const [error, setError] = useState<string | null>(null);
-  const [customPrompt, setCustomPrompt] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload a valid image file.');
-      return;
+  const handleCreateSession = async () => {
+    if (!topic.trim()) return;
+    
+    // Check key for Pro Image model
+    if (window.aistudio) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+             await window.aistudio.openSelectKey();
+        }
     }
-
-    try {
-      setError(null);
-      // Resize immediately for performance/preview
-      const base64 = await resizeImage(file);
-      setImages({ original: base64, result: '' });
-      setStatus(AppStatus.IDLE); // Ready to process
-    } catch (err) {
-      setError('Failed to process image file.');
-      console.error(err);
-    }
-  };
-
-  const handleProcess = async () => {
-    if (!images?.original) return;
 
     setStatus(AppStatus.PROCESSING);
     setError(null);
+    setSession(null);
+    if (audioElement) {
+      audioElement.pause();
+      setAudioElement(null);
+    }
 
     try {
-      const resultBase64 = await removeWatermark(images.original, customPrompt);
-      setImages(prev => prev ? { ...prev, result: resultBase64 } : null);
+      // 1. Generate Script
+      const script = await GeminiService.generateMeditationScript(topic);
+      
+      // 2. Generate Audio (Parallel)
+      const audioPromise = GeminiService.generateMeditationAudio(script)
+        .then(base64 => GeminiService.convertBase64ToWavBlob(base64));
+      
+      // 3. Generate Image (Parallel)
+      const imagePromise = GeminiService.generateMeditationImage(topic, imageSize);
+
+      const [audioUrl, imageUrl] = await Promise.all([audioPromise, imagePromise]);
+
+      setSession({
+        topic,
+        script,
+        audioUrl,
+        imageUrl
+      });
       setStatus(AppStatus.SUCCESS);
     } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to create your session. Please try again.");
       setStatus(AppStatus.ERROR);
-      setError(err.message || 'An unexpected error occurred while processing with Gemini.');
     }
   };
 
-  const handleReset = () => {
-    setImages(null);
-    setStatus(AppStatus.IDLE);
-    setError(null);
-    setCustomPrompt('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  const togglePlay = () => {
+    if (!session || !session.audioUrl) return;
 
-  const handleDownload = () => {
-    if (images?.result) {
-      downloadImage(images.result, 'clearview-result.jpg');
+    if (!audioElement) {
+      const audio = new Audio(session.audioUrl);
+      audio.onended = () => setIsPlaying(false);
+      audio.play();
+      setAudioElement(audio);
+      setIsPlaying(true);
+    } else {
+      if (isPlaying) {
+        audioElement.pause();
+      } else {
+        audioElement.play();
+      }
+      setIsPlaying(!isPlaying);
     }
   };
+
+  const handleKeySelect = async () => {
+      if(window.aistudio) {
+          await window.aistudio.openSelectKey();
+      }
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-[100dvh] bg-slate-950 text-slate-200 flex flex-col font-sans selection:bg-cyan-500/30">
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="bg-gradient-to-tr from-cyan-500 to-blue-600 p-2 rounded-lg">
-              <Eraser className="text-white w-5 h-5" />
+        <div className="max-w-6xl mx-auto px-4 h-14 md:h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-gradient-to-tr from-cyan-500 to-indigo-600 p-1.5 md:p-2 rounded-lg shadow-lg shadow-cyan-900/20">
+              <Sparkles className="text-white w-4 h-4 md:w-5 md:h-5" />
             </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-              ClearView AI
+            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-200 to-indigo-300">
+              MindfulGen AI
             </h1>
           </div>
-          <div className="text-sm text-slate-400 font-medium">
-            Powered by Gemini 2.5 Flash
-          </div>
+          
+          <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setActiveTab('create')}
+              className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
+                activeTab === 'create' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Create
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
+                activeTab === 'chat' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Chat
+            </button>
+          </nav>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-grow flex flex-col items-center p-4 md:p-8">
-        <div className="w-full max-w-5xl space-y-8">
-          
-          {/* Hero / Introduction */}
-          {!images && (
-            <div className="text-center space-y-4 py-12">
-              <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
-                Vanish Watermarks in <span className="text-cyan-400">Seconds</span>
-              </h2>
-              <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-                Upload your image and let our AI intelligent model detect and remove unwanted watermarks, logos, and text overlays while preserving the background.
-              </p>
+      <main className="flex-grow max-w-6xl w-full mx-auto p-4 md:p-8 flex flex-col items-center justify-start md:justify-center">
+        
+        {activeTab === 'chat' && (
+          <div className="w-full flex justify-center animate-in fade-in slide-in-from-bottom-4 h-full">
+            <div className="w-full max-w-md h-[70vh] min-h-[400px]">
+              <ChatBot />
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Upload Section */}
-          {!images && (
-            <div 
-              className="border-2 border-dashed border-slate-700 hover:border-cyan-500/50 hover:bg-slate-900/50 transition-all rounded-3xl p-12 flex flex-col items-center justify-center cursor-pointer group bg-slate-900/30"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleFileChange} 
-              />
-              <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-xl">
-                <Upload className="w-10 h-10 text-cyan-400" />
-              </div>
-              <p className="text-xl font-semibold text-white mb-2">Click to upload or drag and drop</p>
-              <p className="text-slate-500">Supported formats: JPG, PNG, WEBP</p>
-            </div>
-          )}
+        {activeTab === 'create' && (
+          <div className="w-full max-w-4xl space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* Input Section */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+               {/* Background decoration */}
+               <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
-          {/* Processing Area */}
-          {images && status !== AppStatus.SUCCESS && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <ImageIcon size={20} className="text-cyan-400"/> Original Image
-                </h3>
-                <button 
-                  onClick={handleReset} 
-                  className="text-slate-400 hover:text-red-400 transition-colors"
-                  title="Remove image"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              <div className="relative z-10 flex flex-col md:flex-row gap-6 items-end">
+                <div className="flex-grow w-full space-y-2">
+                  <label className="text-sm font-medium text-slate-400 ml-1">What brings you peace?</label>
+                  <textarea
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="E.g., A quiet morning walk in a foggy pine forest..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-5 py-4 text-base focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none h-32 transition-all placeholder-slate-600 appearance-none"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-3 w-full md:w-auto min-w-[200px]">
+                   <div className="space-y-1">
+                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                        <ImageIcon size={12}/> Visual Quality
+                     </label>
+                     <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-700">
+                        {(['1K', '2K', '4K'] as ImageSize[]).map((size) => (
+                           <button
+                             key={size}
+                             onClick={() => setImageSize(size)}
+                             className={`text-xs font-medium py-2 rounded-lg transition-colors ${
+                               imageSize === size ? 'bg-slate-800 text-cyan-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'
+                             }`}
+                           >
+                             {size}
+                           </button>
+                        ))}
+                     </div>
+                   </div>
 
-              {/* Image Preview Container */}
-              <div className="relative w-full h-96 bg-slate-950 rounded-xl overflow-hidden mb-6 flex items-center justify-center border border-slate-800">
-                 {status === AppStatus.PROCESSING ? (
-                   <LoadingState />
-                 ) : (
-                   <img 
-                    src={images.original} 
-                    alt="Original" 
-                    className="max-h-full max-w-full object-contain"
-                   />
-                 )}
-              </div>
-
-              {/* Controls */}
-              {status !== AppStatus.PROCESSING && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Custom Instructions (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="e.g. Remove the logo in the bottom right corner..."
-                      className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 placeholder-slate-600 transition-all"
-                    />
-                    <p className="text-xs text-slate-500 mt-2">
-                      Leave empty for auto-detection.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleProcess}
-                    className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-cyan-500/20 active:scale-[0.99]"
+                   <button
+                    onClick={handleCreateSession}
+                    disabled={status === AppStatus.PROCESSING || !topic}
+                    className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-cyan-500/25 transition-all active:scale-95 flex items-center justify-center gap-2 w-full md:w-auto"
                   >
-                    <Wand2 className="w-5 h-5" />
-                    Remove Watermark
+                    {status === AppStatus.PROCESSING ? (
+                      <RefreshCw className="animate-spin w-5 h-5" />
+                    ) : (
+                      <Sparkles className="w-5 h-5" />
+                    )}
+                    Generate
                   </button>
+                </div>
+              </div>
+              
+              {/* API Key Hint */}
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-xs text-slate-500">
+                 <div className="flex items-center gap-1">
+                   <Settings2 size={12}/>
+                   <span>Paid key required for HD images.</span>
+                 </div>
+                 <button onClick={handleKeySelect} className="text-cyan-400 hover:underline flex items-center gap-1 ml-auto md:ml-0">
+                    <Key size={10}/> Change Key
+                 </button>
+              </div>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm text-center">
+                  {error}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Error Message */}
-          {status === AppStatus.ERROR && error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-4 rounded-xl flex items-center gap-3 animate-in fade-in">
-              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-              <p>{error}</p>
-              <button 
-                onClick={() => setStatus(AppStatus.IDLE)} 
-                className="ml-auto text-sm font-semibold hover:underline"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
+            {/* Loading */}
+            {status === AppStatus.PROCESSING && (
+              <div className="py-12">
+                <LoadingState />
+              </div>
+            )}
 
-          {/* Success / Result View */}
-          {status === AppStatus.SUCCESS && images?.result && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-white">Result</h3>
-                <div className="flex gap-3">
-                  <button 
-                    onClick={handleReset}
-                    className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors font-medium"
-                  >
-                    Upload Another
-                  </button>
-                  <button 
-                    onClick={handleDownload}
-                    className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 shadow-lg transition-all"
-                  >
-                    <Download size={18} />
-                    Download Result
-                  </button>
+            {/* Result Player */}
+            {status === AppStatus.SUCCESS && session && (
+              <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl group border border-slate-800">
+                {/* Background Image */}
+                <img 
+                  src={session.imageUrl} 
+                  alt={session.topic}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-linear scale-100 group-hover:scale-110"
+                />
+                
+                {/* Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent opacity-80" />
+
+                {/* Content */}
+                <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-end items-center text-center">
+                  
+                  <div className="mb-auto w-full flex justify-end">
+                      <div className="bg-black/30 backdrop-blur-md px-3 py-1 rounded-full text-[10px] md:text-xs font-medium border border-white/10">
+                        Generated with Gemini
+                      </div>
+                  </div>
+
+                  <h2 className="text-2xl md:text-4xl font-light text-white mb-2 drop-shadow-lg tracking-wide line-clamp-1">
+                    {session.topic}
+                  </h2>
+                  <p className="text-slate-300 max-w-2xl text-xs md:text-base line-clamp-2 md:line-clamp-3 mb-6 md:mb-8 opacity-90 font-light hidden md:block">
+                    "{session.script.slice(0, 150)}..."
+                  </p>
+
+                  <div className="w-full max-w-md bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 md:p-4 flex items-center gap-4">
+                    <button 
+                      onClick={togglePlay}
+                      className="w-12 h-12 md:w-14 md:h-14 bg-white text-slate-950 rounded-full flex items-center justify-center hover:bg-cyan-50 transition-colors shadow-xl shrink-0"
+                    >
+                      {isPlaying ? <Pause className="fill-current w-5 h-5 md:w-6 md:h-6" /> : <Play className="fill-current ml-1 w-5 h-5 md:w-6 md:h-6" />}
+                    </button>
+                    
+                    <div className="flex-grow h-10 md:h-12 flex items-center justify-center">
+                       {isPlaying ? <Waveform isPlaying={true} /> : <div className="h-0.5 w-full bg-white/20 rounded-full"></div>}
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="bg-slate-900 p-1 rounded-2xl border border-slate-800 shadow-2xl">
-                <ComparisonSlider beforeImage={images.original} afterImage={images.result} />
-              </div>
-              
-              <div className="text-center text-slate-500 text-sm">
-                Drag the slider to compare before and after
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </main>
-      
-      {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-900 py-8 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-slate-500">
-          <p>&copy; {new Date().getFullYear()} ClearView AI. All rights reserved.</p>
-        </div>
-      </footer>
     </div>
   );
 };
