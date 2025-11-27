@@ -1,0 +1,5 @@
+{
+  "name": "ClearView AI - Watermark Remover",
+  "description": "An intelligent tool powered by Gemini 2.5 Flash to automatically detect and remove watermarks, text, and unwanted overlays from your images.",
+  "requestFramePermissions": []
+}
