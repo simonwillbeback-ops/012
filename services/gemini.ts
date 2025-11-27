@@ -1,21 +1,25 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { ImageSize } from "../types";
 
-// Safe access to process.env
+// Safe access to process.env that works in browser and Node environments
 const getEnvApiKey = () => {
   try {
-    return typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
+    // Check if process exists globally (Node/Polyfill)
+    const p = (typeof process !== 'undefined' ? process : undefined) || (typeof window !== 'undefined' ? (window as any).process : undefined);
+    return p?.env?.API_KEY || '';
   } catch (e) {
+    console.warn("Failed to read environment variable:", e);
     return '';
   }
 };
 
-const API_KEY = getEnvApiKey();
-
 // --- Helpers ---
 
 const getAI = (apiKey?: string) => {
-  const key = apiKey || API_KEY;
+  // Fetch key dynamically every time to ensure we catch late injections
+  const envKey = getEnvApiKey();
+  const key = apiKey || envKey;
+  
   if (!key) {
     throw new Error("API Key is missing. Please set the API_KEY environment variable in your deployment settings.");
   }

@@ -19,9 +19,6 @@ const App: React.FC = () => {
   const handleCreateSession = async () => {
     if (!topic.trim()) return;
     
-    // We used to enforce a paid key for Pro models here, 
-    // but now we use Flash models which work on the free tier.
-    
     setStatus(AppStatus.PROCESSING);
     setError(null);
     setSession(null);
@@ -79,6 +76,8 @@ const App: React.FC = () => {
   const handleKeySelect = async () => {
       if(window.aistudio) {
           await window.aistudio.openSelectKey();
+      } else {
+        alert("To change the API Key, please update the API_KEY environment variable in your deployment settings (e.g., Netlify Site Settings > Environment Variables).");
       }
   }
 
@@ -193,7 +192,13 @@ const App: React.FC = () => {
 
               {error && (
                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm text-center">
-                  {error}
+                  <p className="font-semibold text-red-400">Error</p>
+                  <p>{error}</p>
+                  {!window.aistudio && error.includes("API Key") && (
+                    <p className="mt-2 text-xs text-slate-400">
+                      Deploying to Netlify? Go to <strong>Site Settings &gt; Environment Variables</strong> and add <code>API_KEY</code>.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
