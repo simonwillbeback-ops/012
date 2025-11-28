@@ -1,173 +1,92 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { ImageSize } from "../types";
 
-// Declare process for TS to avoid errors in strict environments without node types
-declare const process: { env: { [key: string]: string | undefined } };
+/**
+ * Service to interact with Google GenAI models.
+ */
 
-// Safe access to environment variables that works with bundlers (Vite/Webpack)
-const getEnvApiKey = () => {
-  // 1. Check process.env.API_KEY directly. 
-  // IMPORTANT: Bundlers look for this exact string to perform replacement at build time.
-  try {
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {}
-
-  // 2. Check Vite-specific environment variables (import.meta.env)
-  try {
-    // @ts-ignore
-    if (import.meta && import.meta.env) {
-      // @ts-ignore
-      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
-      // @ts-ignore
-      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
-    }
-  } catch (e) {}
-
-  return '';
-};
-
-// --- Helpers ---
-
-const getAI = (apiKey?: string) => {
-  // Fetch key dynamically every time to ensure we catch late injections
-  const envKey = getEnvApiKey();
-  const key = apiKey || envKey;
-  
-  if (!key) {
-    throw new Error("API Key is missing. Please set API_KEY (or VITE_API_KEY) in your deployment settings.");
-  }
-  return new GoogleGenAI({ apiKey: key });
-};
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Chat & Script Generation ---
 
 export const chatWithGuide = async (history: { role: string, parts: { text: string }[] }[], message: string) => {
   try {
-    const ai = getAI();
-    const chat = ai.chats.create({
+    const contents = [
+      ...history.map(h => ({
+        role: h.role,
+        parts: h.parts
+      })),
+      { role: 'user', parts: [{ text: message }] }
+    ];
+
+    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      history: history,
+      contents: contents,
       config: {
-        systemInstruction: "You are a calming, empathetic meditation guide. Keep your responses concise, soothing, and helpful. You help users find mindfulness.",
+        systemInstruction: "You are a calming, empathetic meditation guide. Keep responses concise and soothing.",
       }
     });
 
-    const result = await chat.sendMessage({ message });
-    return result.text;
+    return response.text || "I'm listening...";
   } catch (error: any) {
     console.error("Chat Error:", error);
-    throw error;
+    return "I am sensing some interference. Let us take a breath and try again.";
   }
 };
 
 export const generateMeditationScript = async (topic: string): Promise<string> => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: `Write a short, soothing guided meditation script about: ${topic}. 
-    The script should be around 150-200 words. 
-    Focus on sensory details and breathing. 
-    Do not include instructions like [Pause] or *soft music*, just the spoken words.`,
-  });
-  return response.text || "Breathe in... Breathe out...";
+  const prompt = `Write a short, soothing guided meditation script about: ${topic}. The script should be around 150-200 words. Focus on sensory details and breathing. Do not include instructions like [Pause] or *soft music*, just the spoken words.`;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+    return response.text || "Breathe in... Breathe out... Let your mind settle.";
+  } catch (error) {
+    console.error(error);
+    throw new Error("Could not generate meditation script. Please try again.");
+  }
 };
 
 // --- Image Generation ---
 
 export const generateMeditationImage = async (prompt: string, size: ImageSize): Promise<string> => {
-  // Use the standard Flash Image model which is available in the free tier
-  const ai = getAI();
+  const enhancedPrompt = `serene, artistic, calming meditation background, ${prompt}, soft lighting, high quality, 4k`;
+  
+  // Use gemini-3-pro-image-preview for high quality and size support
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: {
+        parts: [{ text: enhancedPrompt }]
+      },
+      config: {
+        imageConfig: {
+          imageSize: size, // '1K', '2K', '4K'
+          aspectRatio: '16:9'
+        }
+      }
+    });
 
-  // Flash model does not support 'imageSize' in config, so we add it to the prompt for stylistic guidance
-  const resolutionPrompt = size === '4K' ? 'highly detailed, 4k resolution, masterpiece' : 'high quality';
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [{ text: `A serene, artistic, calming meditation background image about: ${prompt}. Soft lighting, abstract or nature-focused, ${resolutionPrompt}.` }],
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: "16:9"
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }
-  });
-
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData && part.inlineData.data) {
-      return `data:image/png;base64,${part.inlineData.data}`;
-    }
+    throw new Error("No image data returned");
+  } catch (error) {
+    console.error("Image Gen Error:", error);
+    throw new Error("Failed to generate image.");
   }
-  throw new Error("Failed to generate image");
 };
 
-// --- Text to Speech ---
-
+// --- Audio (Browser Native TTS) ---
+// No server-side generation needed. We use window.speechSynthesis in App.tsx
 export const generateMeditationAudio = async (text: string): Promise<string> => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: text }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore is usually good for calm/neutral
-        },
-      },
-    },
-  });
-
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64Audio) throw new Error("Failed to generate speech");
-
-  return base64Audio;
+    return ""; // Placeholder
 };
 
 export const convertBase64ToWavBlob = (base64: string): string => {
-   const binaryString = window.atob(base64);
-   const len = binaryString.length;
-   const bytes = new Uint8Array(len);
-   for (let i = 0; i < len; i++) {
-     bytes[i] = binaryString.charCodeAt(i);
-   }
-   return pcmToWav(bytes);
-}
-
-// WAV Header helper
-function pcmToWav(pcmData: Uint8Array, sampleRate: number = 24000) {
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  const channels = 1;
-  const dataSize = pcmData.length;
-  const fileSize = 36 + dataSize;
-
-  // RIFF identifier
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, fileSize, true);
-  // RIFF type
-  writeString(view, 8, 'WAVE');
-  // format chunk identifier
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // byte rate
-  view.setUint16(32, 2, true); // block align
-  view.setUint16(34, 16, true); // bits per sample
-  // data chunk identifier
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  const blob = new Blob([header, pcmData], { type: 'audio/wav' });
-  return URL.createObjectURL(blob);
-}
-
-function writeString(view: DataView, offset: number, string: string) {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i));
-  }
-}
+    return ""; // Unused
+};

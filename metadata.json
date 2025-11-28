@@ -1,6 +1,6 @@
 {
   "name": "MindfulGen AI",
-  "description": "Generate custom guided meditation sessions with unique visuals and voiceovers using Gemini.",
+  "description": "Generate custom guided meditation sessions with unique visuals and voiceovers using open source AI.",
   "requestFramePermissions": [
     "microphone"
   ]

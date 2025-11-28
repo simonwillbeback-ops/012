@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Sparkles, Play, Pause, RefreshCw, MessageCircle, Settings2, Image as ImageIcon, Key } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Sparkles, Play, Pause, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { AppStatus, ImageSize, MeditationSession } from './types';
-import * as GeminiService from './services/gemini';
+import * as AIService from './services/gemini'; // Keeping filename but content is now generic AI
 import ChatBot from './components/ChatBot';
 import Waveform from './components/Waveform';
 import LoadingState from './components/LoadingState';
@@ -11,75 +11,86 @@ const App: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [imageSize, setImageSize] = useState<ImageSize>('1K');
   const [session, setSession] = useState<MeditationSession | null>(null);
+  
+  // Playback State
   const [isPlaying, setIsPlaying] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [activeTab, setActiveTab] = useState<'create' | 'chat'>('create');
   const [error, setError] = useState<string | null>(null);
+
+  // TTS Ref
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Cleanup TTS on unmount
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, []);
 
   const handleCreateSession = async () => {
     if (!topic.trim()) return;
     
+    // Stop any current audio
+    window.speechSynthesis.cancel();
+    setIsPlaying(false);
+
     setStatus(AppStatus.PROCESSING);
     setError(null);
     setSession(null);
-    if (audioElement) {
-      audioElement.pause();
-      setAudioElement(null);
-    }
 
     try {
-      // 1. Generate Script
-      const script = await GeminiService.generateMeditationScript(topic);
+      // 1. Generate Script (Free AI)
+      const script = await AIService.generateMeditationScript(topic);
       
-      // 2. Generate Audio (Parallel)
-      const audioPromise = GeminiService.generateMeditationAudio(script)
-        .then(base64 => GeminiService.convertBase64ToWavBlob(base64));
-      
-      // 3. Generate Image (Parallel)
-      const imagePromise = GeminiService.generateMeditationImage(topic, imageSize);
-
-      const [audioUrl, imageUrl] = await Promise.all([audioPromise, imagePromise]);
+      // 2. Generate Image (Free AI)
+      const imageUrl = await AIService.generateMeditationImage(topic, imageSize);
 
       setSession({
         topic,
         script,
-        audioUrl,
+        audioUrl: '', // Not used for TTS
         imageUrl
       });
       setStatus(AppStatus.SUCCESS);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to create your session. Please try again.");
+      setError(err.message || "Failed to create your session. Please check your connection.");
       setStatus(AppStatus.ERROR);
     }
   };
 
   const togglePlay = () => {
-    if (!session || !session.audioUrl) return;
+    if (!session) return;
 
-    if (!audioElement) {
-      const audio = new Audio(session.audioUrl);
-      audio.onended = () => setIsPlaying(false);
-      audio.play();
-      setAudioElement(audio);
-      setIsPlaying(true);
+    if (isPlaying) {
+      window.speechSynthesis.pause();
+      setIsPlaying(false);
     } else {
-      if (isPlaying) {
-        audioElement.pause();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        setIsPlaying(true);
       } else {
-        audioElement.play();
+        // Start fresh
+        const utterance = new SpeechSynthesisUtterance(session.script);
+        utterance.rate = 0.85; // Slower for meditation
+        utterance.pitch = 0.9; // Slightly deeper
+        
+        // Try to find a good English voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes("Google US English")) || 
+                               voices.find(v => v.lang.includes("en-US")) || 
+                               voices[0];
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        utterance.onend = () => setIsPlaying(false);
+        utterance.onerror = () => setIsPlaying(false);
+        
+        utteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+        setIsPlaying(true);
       }
-      setIsPlaying(!isPlaying);
     }
   };
-
-  const handleKeySelect = async () => {
-      if(window.aistudio) {
-          await window.aistudio.openSelectKey();
-      } else {
-        alert("To change the API Key, please update the API_KEY (or VITE_API_KEY) environment variable in your deployment settings.");
-      }
-  }
 
   return (
     <div className="min-h-[100dvh] bg-slate-950 text-slate-200 flex flex-col font-sans selection:bg-cyan-500/30">
@@ -180,26 +191,17 @@ const App: React.FC = () => {
                 </div>
               </div>
               
-              {/* Footer / API Key Hint */}
+              {/* Footer / Credits */}
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                  <div>
-                    Powered by Gemini Flash 2.5 (Free Tier Compatible)
+                    Powered by Open Source AI (Pollinations) & Browser TTS
                  </div>
-                 <button onClick={handleKeySelect} className="text-cyan-400 hover:underline flex items-center gap-1 ml-auto md:ml-0">
-                    <Key size={10}/> Change Key
-                 </button>
               </div>
 
               {error && (
                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm text-center">
                   <p className="font-semibold text-red-400">Error</p>
                   <p>{error}</p>
-                  {!window.aistudio && error.includes("API Key") && (
-                    <p className="mt-2 text-xs text-slate-400">
-                      Deploying to Netlify? Go to <strong>Site Settings &gt; Environment Variables</strong>. 
-                      Add <code>API_KEY</code> (or <code>VITE_API_KEY</code> if your build uses Vite).
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -229,7 +231,7 @@ const App: React.FC = () => {
                   
                   <div className="mb-auto w-full flex justify-end">
                       <div className="bg-black/30 backdrop-blur-md px-3 py-1 rounded-full text-[10px] md:text-xs font-medium border border-white/10">
-                        Generated with Gemini
+                        AI Generated
                       </div>
                   </div>
 
