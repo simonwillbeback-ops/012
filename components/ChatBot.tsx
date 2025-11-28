@@ -58,7 +58,7 @@ const ChatBot: React.FC = () => {
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: "I'm having trouble connecting to my inner peace (and the server). Please try again.",
+        text: "I'm having trouble connecting. Please try again.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -71,7 +71,7 @@ const ChatBot: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
       <div className="bg-slate-800 p-4 border-b border-slate-700 flex items-center gap-2 shrink-0">
         <Sparkles className="w-5 h-5 text-cyan-400" />
-        <h3 className="font-semibold text-white">Mindful Guide</h3>
+        <h3 className="font-semibold text-white">Mindful Guide (Free AI)</h3>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">

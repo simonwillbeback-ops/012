@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Play, Pause, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { AppStatus, ImageSize, MeditationSession } from './types';
-import * as AIService from './services/gemini'; // Keeping filename but content is now generic AI
+import * as AIService from './services/gemini'; 
 import ChatBot from './components/ChatBot';
 import Waveform from './components/Waveform';
 import LoadingState from './components/LoadingState';
@@ -194,7 +194,7 @@ const App: React.FC = () => {
               {/* Footer / Credits */}
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                  <div>
-                    Powered by Open Source AI (Pollinations) & Browser TTS
+                    Powered by Free Open Source AI
                  </div>
               </div>
 

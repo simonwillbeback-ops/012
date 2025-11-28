@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = process.env.API_KEY || '';
-
 // Clean base64 string to remove data header for API consumption if needed, 
 // though inlineData usually handles standard base64 strings well.
 const cleanBase64 = (dataUrl: string): string => {
@@ -12,11 +10,8 @@ export const removeWatermark = async (
   base64Image: string, 
   customInstruction: string = ''
 ): Promise<string> => {
-  if (!API_KEY) {
-    throw new Error("API Key is missing. Please set the API_KEY environment variable.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  // Always use process.env.API_KEY directly as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   // Clean the base64 string
   const rawBase64 = cleanBase64(base64Image);
