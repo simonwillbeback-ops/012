@@ -1,16 +1,31 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { ImageSize } from "../types";
 
-// Safe access to process.env that works in browser and Node environments
+// Declare process for TS to avoid errors in strict environments without node types
+declare const process: { env: { [key: string]: string | undefined } };
+
+// Safe access to environment variables that works with bundlers (Vite/Webpack)
 const getEnvApiKey = () => {
+  // 1. Check process.env.API_KEY directly. 
+  // IMPORTANT: Bundlers look for this exact string to perform replacement at build time.
   try {
-    // Check if process exists globally (Node/Polyfill)
-    const p = (typeof process !== 'undefined' ? process : undefined) || (typeof window !== 'undefined' ? (window as any).process : undefined);
-    return p?.env?.API_KEY || '';
-  } catch (e) {
-    console.warn("Failed to read environment variable:", e);
-    return '';
-  }
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {}
+
+  // 2. Check Vite-specific environment variables (import.meta.env)
+  try {
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+      // @ts-ignore
+      if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
+      // @ts-ignore
+      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+    }
+  } catch (e) {}
+
+  return '';
 };
 
 // --- Helpers ---
@@ -21,7 +36,7 @@ const getAI = (apiKey?: string) => {
   const key = apiKey || envKey;
   
   if (!key) {
-    throw new Error("API Key is missing. Please set the API_KEY environment variable in your deployment settings.");
+    throw new Error("API Key is missing. Please set API_KEY (or VITE_API_KEY) in your deployment settings.");
   }
   return new GoogleGenAI({ apiKey: key });
 };

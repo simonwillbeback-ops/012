@@ -77,7 +77,7 @@ const App: React.FC = () => {
       if(window.aistudio) {
           await window.aistudio.openSelectKey();
       } else {
-        alert("To change the API Key, please update the API_KEY environment variable in your deployment settings (e.g., Netlify Site Settings > Environment Variables).");
+        alert("To change the API Key, please update the API_KEY (or VITE_API_KEY) environment variable in your deployment settings.");
       }
   }
 
@@ -196,7 +196,8 @@ const App: React.FC = () => {
                   <p>{error}</p>
                   {!window.aistudio && error.includes("API Key") && (
                     <p className="mt-2 text-xs text-slate-400">
-                      Deploying to Netlify? Go to <strong>Site Settings &gt; Environment Variables</strong> and add <code>API_KEY</code>.
+                      Deploying to Netlify? Go to <strong>Site Settings &gt; Environment Variables</strong>. 
+                      Add <code>API_KEY</code> (or <code>VITE_API_KEY</code> if your build uses Vite).
                     </p>
                   )}
                 </div>
